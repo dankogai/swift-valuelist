@@ -5,32 +5,32 @@
 //  Copyright (c) 2026 Dan Kogai. All rights reserved.
 //
 
-public indirect enum Node<Element> {
+public indirect enum VNode<Element> {
     case Atom(Element)
-    case Pair(Cons<Element>)
+    case Pair(VCons<Element>)
 }
 
-public struct Cons<Element> {
-    public var car:Node<Element>? = nil
-    public var cdr:Node<Element>? = nil
+public struct VCons<Element> {
+    public var car:VNode<Element>? = nil
+    public var cdr:VNode<Element>? = nil
     //
     public init() {
         car = nil
         cdr = nil
     }
-    public init(car:Node<Element>? = nil, cdr:Node<Element>? = nil) {
+    public init(car:VNode<Element>? = nil, cdr:VNode<Element>? = nil) {
         self.car = car
         self.cdr = cdr
     }
 }
 
-extension Cons {
-    public init(nodes:[Node<Element>]) {
+extension VCons {
+    public init(nodes:[VNode<Element>]) {
         self.init()
         guard let first = nodes.first else { return }
-        var cdr:Node<Element>? = nil
+        var cdr:VNode<Element>? = nil
         for node in nodes.dropFirst().reversed() {
-            cdr = .Pair(Cons(car:node, cdr:cdr))
+            cdr = .Pair(VCons(car:node, cdr:cdr))
         }
         self.car = first
         self.cdr = cdr
@@ -38,35 +38,35 @@ extension Cons {
     public init(_ values:Element ...) {
         self.init(nodes:values.map{ .Atom($0) })
     }
-    /// Accepts a mix of `Element` and `Cons<Element>`;
-    /// a `Cons` argument becomes a sublist, e.g. Cons<Int>(1, Cons(2, 3), 4) == (1 (2 3) 4).
+    /// Accepts a mix of `Element` and `VCons<Element>`;
+    /// a `VCons` argument becomes a sublist, e.g. VCons<Int>(1, VCons(2, 3), 4) == (1 (2 3) 4).
     /// Note: `Element` cannot be inferred through `Any`, so mixed calls
-    /// need the type spelled out, as in `Cons<Int>(...)`.
+    /// need the type spelled out, as in `VCons<Int>(...)`.
     public init(_ values:Any ...) {
         self.init(nodes:values.map{ value in
             switch value {
-            case let cons as Cons<Element>: return .Pair(cons)
-            case let node as Node<Element>: return node
+            case let cons as VCons<Element>: return .Pair(cons)
+            case let node as VNode<Element>: return node
             case let element as Element:    return .Atom(element)
             default:
-                preconditionFailure("\(value) is neither Element nor Cons<Element>")
+                preconditionFailure("\(value) is neither Element nor VCons<Element>")
             }
         })
     }
 }
 
-extension Cons {
+extension VCons {
     /// Appends `node` at the end of the list.
     /// An empty cons becomes a one-element list;
     /// appending to an improper list — one whose last cdr is an atom — is a programmer error.
-    public mutating func append(node:Node<Element>) {
+    public mutating func append(node:VNode<Element>) {
         if car == nil && cdr == nil {
             car = node
             return
         }
         switch cdr {
         case nil:
-            cdr = .Pair(Cons(car:node))
+            cdr = .Pair(VCons(car:node))
         case .Pair(var next)?:
             next.append(node:node)
             cdr = .Pair(next)
@@ -78,18 +78,18 @@ extension Cons {
         append(node:.Atom(element))
     }
     /// Appends `cons` as a sublist, e.g. (1 2) appended (3 4) == (1 2 (3 4)).
-    public mutating func append(_ cons:Cons<Element>) {
+    public mutating func append(_ cons:VCons<Element>) {
         append(node:.Pair(cons))
     }
 }
 
-extension Cons {
+extension VCons {
     public var isEmpty:Bool {
         return car == nil && cdr == nil
     }
     /// Splices `cons` at the end of the list — concatenation, not nesting:
     /// (1 2) appended contentsOf (3 4) == (1 2 3 4).
-    public mutating func append(contentsOf cons:Cons<Element>) {
+    public mutating func append(contentsOf cons:VCons<Element>) {
         guard !cons.isEmpty else { return }
         if isEmpty {
             self = cons
@@ -106,20 +106,20 @@ extension Cons {
         }
     }
     public mutating func append<S:Sequence>(contentsOf values:S) where S.Element == Element {
-        append(contentsOf:Cons(nodes:values.map{ .Atom($0) }))
+        append(contentsOf:VCons(nodes:values.map{ .Atom($0) }))
     }
     /// Concatenates two lists, e.g. (1 2) + (3 4) == (1 2 3 4).
-    public static func +(lhs:Cons<Element>, rhs:Cons<Element>) -> Cons<Element> {
+    public static func +(lhs:VCons<Element>, rhs:VCons<Element>) -> VCons<Element> {
         var result = lhs
         result.append(contentsOf:rhs)
         return result
     }
-    public static func +=(lhs:inout Cons<Element>, rhs:Cons<Element>) {
+    public static func +=(lhs:inout VCons<Element>, rhs:VCons<Element>) {
         lhs.append(contentsOf:rhs)
     }
 }
 
-extension Node: CustomStringConvertible {
+extension VNode: CustomStringConvertible {
     public var description:String {
         switch self {
         case .Atom(let value): return "\(value)"
@@ -127,7 +127,7 @@ extension Node: CustomStringConvertible {
         }
     }
 }
-extension Cons: CustomStringConvertible {
+extension VCons: CustomStringConvertible {
     public var description:String {
         if car == nil && cdr == nil { return "()" }
         var elements = [String]()
@@ -146,8 +146,8 @@ extension Cons: CustomStringConvertible {
     }
 }
 
-extension Node: Equatable where Element: Equatable {
-    public static func ==(lhs: Node<Element>, rhs: Node<Element>) -> Bool {
+extension VNode: Equatable where Element: Equatable {
+    public static func ==(lhs: VNode<Element>, rhs: VNode<Element>) -> Bool {
         switch (lhs, rhs) {
         case (.Atom(let lhs), .Atom(let rhs)):
             return lhs == rhs
@@ -157,16 +157,16 @@ extension Node: Equatable where Element: Equatable {
         }
     }
 }
-extension Cons: Equatable where Element: Equatable {
-    public static func ==(lhs: Cons<Element>, rhs: Cons<Element>) -> Bool {
+extension VCons: Equatable where Element: Equatable {
+    public static func ==(lhs: VCons<Element>, rhs: VCons<Element>) -> Bool {
         return lhs.car == rhs.car && lhs.cdr == rhs.cdr
     }
 }
 
-extension Cons: Sequence {
+extension VCons: Sequence {
     public struct Iterator: IteratorProtocol {
-        var cons:Cons<Element>?
-        public mutating func next() -> Node<Element>? {
+        var cons:VCons<Element>?
+        public mutating func next() -> VNode<Element>? {
             while let current = cons {
                 switch current.cdr {
                 case .Pair(let next)?: cons = next

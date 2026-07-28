@@ -2,7 +2,7 @@
 
 import ValueList
 
-var cons = Cons(0,1,2,3)
+var cons = VCons(0,1,2,3)
 
 cons.append(cons)
 cons.description
