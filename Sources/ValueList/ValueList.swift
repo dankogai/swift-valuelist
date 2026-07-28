@@ -19,3 +19,20 @@ public struct Cons<Element> {
         self.cdr = cdr
     }
 }
+
+extension Node: Equatable where Element: Equatable {
+    public static func ==(lhs: Node<Element>, rhs: Node<Element>) -> Bool {
+        switch (lhs, rhs) {
+        case (.Atom(let lhs), .Atom(let rhs)):
+            return lhs == rhs
+        case (.Pair(let lhs), .Pair(let rhs)):
+            return lhs == rhs
+        default: return false
+        }
+    }
+}
+extension Cons: Equatable where Element: Equatable {
+    public static func ==(lhs: Cons<Element>, rhs: Cons<Element>) -> Bool {
+        return lhs.car == rhs.car && lhs.cdr == rhs.cdr
+    }
+}
