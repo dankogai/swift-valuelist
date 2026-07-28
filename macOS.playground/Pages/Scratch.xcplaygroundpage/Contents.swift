@@ -2,13 +2,13 @@
 
 import ValueList
 
-var cons0 = Cons<Int>()
-cons0.car = .Atom(0)
-var cons1 = Cons(car:.Atom(0))
+var cons = Cons(0,1,2,3)
 
-var cons2 = cons1
-cons2.cdr = .Pair(cons0)
-var cons3 = Cons(car:.Atom(0), cdr:.Pair(cons0))
+cons.append(cons)
+cons.description
 
-cons2 == cons3
+//for v in cons {
+//    print(v)
+//}
+
 //: [Next](@next)
