@@ -52,3 +52,52 @@ import Testing
         #expect(lhs != rhs)
     }
 }
+
+@Suite struct VariadicInitTests {
+    @Test func emptyList() {
+        #expect(Cons<Int>() == Cons<Int>())
+    }
+
+    @Test func singleElement() {
+        #expect(Cons(42) == Cons(car: .Atom(42)))
+    }
+
+    @Test func multipleElements() {
+        let expected = Cons(
+            car: .Atom(1),
+            cdr: .Pair(Cons(car: .Atom(2), cdr: .Pair(Cons(car: .Atom(3)))))
+        )
+        #expect(Cons(1, 2, 3) == expected)
+    }
+}
+
+@Suite struct DescriptionTests {
+    @Test func emptyCons() {
+        #expect(Cons<Int>().description == "()")
+    }
+
+    @Test func atom() {
+        #expect(Node.Atom(42).description == "42")
+        #expect(Node.Atom("swift").description == "swift")
+    }
+
+    @Test func properList() {
+        #expect(Cons(1, 2, 3).description == "(1 2 3)")
+        #expect(Cons(42).description == "(42)")
+    }
+
+    @Test func dottedPair() {
+        #expect(Cons(car: .Atom(1), cdr: .Atom(2)).description == "(1 . 2)")
+    }
+
+    @Test func nestedList() {
+        // ((1 2) 3)
+        let inner = Cons(1, 2)
+        let outer = Cons(car: .Pair(inner), cdr: .Pair(Cons(3)))
+        #expect(outer.description == "((1 2) 3)")
+    }
+
+    @Test func nilCar() {
+        #expect(Cons<Int>(car: nil, cdr: .Atom(2)).description == "(nil . 2)")
+    }
+}
