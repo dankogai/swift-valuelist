@@ -5,30 +5,32 @@
 //  Copyright (c) 2026 Dan Kogai. All rights reserved.
 //
 
-public indirect enum VNode<Element> {
-    case Atom(Element)
-    case Pair(VCons<Element>)
-}
-
 public struct VCons<Element> {
-    public var car:VNode<Element>? = nil
-    public var cdr:VNode<Element>? = nil
+    /// The cell content type. An implementation detail of `VCons` —
+    /// build lists with the `VCons` initializers and `append` family
+    /// rather than constructing nodes directly.
+    public indirect enum Node {
+        case Atom(Element)
+        case Pair(VCons<Element>)
+    }
+    public var car:Node? = nil
+    public var cdr:Node? = nil
     //
     public init() {
         car = nil
         cdr = nil
     }
-    public init(car:VNode<Element>? = nil, cdr:VNode<Element>? = nil) {
+    public init(car:Node? = nil, cdr:Node? = nil) {
         self.car = car
         self.cdr = cdr
     }
 }
 
 extension VCons {
-    public init(nodes:[VNode<Element>]) {
+    public init(nodes:[Node]) {
         self.init()
         guard let first = nodes.first else { return }
-        var cdr:VNode<Element>? = nil
+        var cdr:Node? = nil
         for node in nodes.dropFirst().reversed() {
             cdr = .Pair(VCons(car:node, cdr:cdr))
         }
@@ -46,8 +48,8 @@ extension VCons {
         self.init(nodes:values.map{ value in
             switch value {
             case let cons as VCons<Element>: return .Pair(cons)
-            case let node as VNode<Element>: return node
-            case let element as Element:    return .Atom(element)
+            case let node as Node:           return node
+            case let element as Element:     return .Atom(element)
             default:
                 preconditionFailure("\(value) is neither Element nor VCons<Element>")
             }
@@ -59,7 +61,7 @@ extension VCons {
     /// Appends `node` at the end of the list.
     /// An empty cons becomes a one-element list;
     /// appending to an improper list — one whose last cdr is an atom — is a programmer error.
-    public mutating func append(node:VNode<Element>) {
+    public mutating func append(node:Node) {
         if car == nil && cdr == nil {
             car = node
             return
@@ -119,7 +121,7 @@ extension VCons {
     }
 }
 
-extension VNode: CustomStringConvertible {
+extension VCons.Node: CustomStringConvertible {
     public var description:String {
         switch self {
         case .Atom(let value): return "\(value)"
@@ -146,8 +148,8 @@ extension VCons: CustomStringConvertible {
     }
 }
 
-extension VNode: Equatable where Element: Equatable {
-    public static func ==(lhs: VNode<Element>, rhs: VNode<Element>) -> Bool {
+extension VCons.Node: Equatable where Element: Equatable {
+    public static func ==(lhs: VCons<Element>.Node, rhs: VCons<Element>.Node) -> Bool {
         switch (lhs, rhs) {
         case (.Atom(let lhs), .Atom(let rhs)):
             return lhs == rhs
@@ -166,7 +168,7 @@ extension VCons: Equatable where Element: Equatable {
 extension VCons: Sequence {
     public struct Iterator: IteratorProtocol {
         var cons:VCons<Element>?
-        public mutating func next() -> VNode<Element>? {
+        public mutating func next() -> VCons<Element>.Node? {
             while let current = cons {
                 switch current.cdr {
                 case .Pair(let next)?: cons = next
@@ -180,7 +182,4 @@ extension VCons: Sequence {
     public func makeIterator() -> Iterator {
         return Iterator(cons: self)
     }
-    
-    
 }
-

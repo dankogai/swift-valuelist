@@ -3,15 +3,15 @@ import Testing
 
 @Suite struct EquatabilityTests {
     @Test func atomEquality() {
-        #expect(VNode.Atom(42) == VNode.Atom(42))
-        #expect(VNode.Atom(42) != VNode.Atom(43))
-        #expect(VNode.Atom("swift") == VNode.Atom("swift"))
-        #expect(VNode.Atom("swift") != VNode.Atom("lisp"))
+        #expect(VCons<Int>.Node.Atom(42) == VCons<Int>.Node.Atom(42))
+        #expect(VCons<Int>.Node.Atom(42) != VCons<Int>.Node.Atom(43))
+        #expect(VCons<String>.Node.Atom("swift") == VCons<String>.Node.Atom("swift"))
+        #expect(VCons<String>.Node.Atom("swift") != VCons<String>.Node.Atom("lisp"))
     }
 
     @Test func atomVsPair() {
-        let atom = VNode.Atom(0)
-        let pair = VNode.Pair(VCons(car: .Atom(0)))
+        let atom = VCons<Int>.Node.Atom(0)
+        let pair = VCons<Int>.Node.Pair(VCons(car: .Atom(0)))
         #expect(atom != pair)
         #expect(pair != atom)
     }
@@ -37,7 +37,7 @@ import Testing
 
     @Test func nestedEquality() {
         // ((1 . 2) . (3 . nil))
-        func make() -> VNode<Int> {
+        func make() -> VCons<Int>.Node {
             .Pair(VCons(
                 car: .Pair(VCons(car: .Atom(1), cdr: .Atom(2))),
                 cdr: .Pair(VCons(car: .Atom(3), cdr: nil))
@@ -47,8 +47,8 @@ import Testing
     }
 
     @Test func nestedInequality() {
-        let lhs = VNode.Pair(VCons(car: .Pair(VCons(car: .Atom(1), cdr: nil)), cdr: nil))
-        let rhs = VNode.Pair(VCons(car: .Pair(VCons(car: .Atom(2), cdr: nil)), cdr: nil))
+        let lhs = VCons<Int>.Node.Pair(VCons(car: .Pair(VCons(car: .Atom(1), cdr: nil)), cdr: nil))
+        let rhs = VCons<Int>.Node.Pair(VCons(car: .Pair(VCons(car: .Atom(2), cdr: nil)), cdr: nil))
         #expect(lhs != rhs)
     }
 }
@@ -112,8 +112,8 @@ import Testing
     }
 
     @Test func atom() {
-        #expect(VNode.Atom(42).description == "42")
-        #expect(VNode.Atom("swift").description == "swift")
+        #expect(VCons<Int>.Node.Atom(42).description == "42")
+        #expect(VCons<String>.Node.Atom("swift").description == "swift")
     }
 
     @Test func properList() {
