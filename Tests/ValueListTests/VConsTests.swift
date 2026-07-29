@@ -97,6 +97,16 @@ import Testing
         #expect(list.description == "((1 2))")
     }
 
+    @Test func listOfSublists() {
+        // VCons(vcons, vcons) infers VCons<Int>, not the absurd VCons<VCons<Int>>
+        let list = VCons(VCons(1, 2), VCons(3, 4))
+        #expect(type(of: list) == VCons<Int>.self)
+        #expect(list.description == "((1 2) (3 4))")
+        #expect(list[0].pair == VCons(1, 2))
+        #expect(list[1].pair == VCons(3, 4))
+        #expect(list.count == 2)
+    }
+
     @Test func mixedMatchesManualConstruction() {
         let viaInit = VCons<String>("a", VCons("b"), "c")
         var manual = VCons<String>()
@@ -296,5 +306,149 @@ import Testing
         var list = VCons(1, 2)
         list += VCons(3, 4)
         #expect(list == VCons(1, 2, 3, 4))
+    }
+}
+
+@Suite struct CollectionTests {
+    @Test func emptyCollection() {
+        let empty = VCons<Int>()
+        #expect(empty.startIndex == empty.endIndex)
+        #expect(empty.count == 0)
+        #expect(empty.first == nil)
+    }
+
+    @Test func countAndFirst() {
+        let list = VCons(1, 2, 3)
+        #expect(list.count == 3)
+        #expect(list.first == .Atom(1))
+    }
+
+    @Test func subscriptByIndex() {
+        let list = VCons(1, 2, 3)
+        var i = list.startIndex
+        #expect(list[i] == .Atom(1))
+        i = list.index(after: i)
+        #expect(list[i] == .Atom(2))
+        i = list.index(after: i)
+        #expect(list[i] == .Atom(3))
+        #expect(list.index(after: i) == list.endIndex)
+    }
+
+    @Test func indicesAreOrdered() {
+        let list = VCons(1, 2, 3)
+        let first = list.startIndex
+        let second = list.index(after: first)
+        #expect(first < second)
+        #expect(second < list.endIndex)
+    }
+
+    @Test func indexOffsetBy() {
+        let list = VCons(10, 20, 30)
+        let i = list.index(list.startIndex, offsetBy: 2)
+        #expect(list[i] == .Atom(30))
+        #expect(list.distance(from: list.startIndex, to: list.endIndex) == 3)
+    }
+
+    @Test func collectionMatchesIterator() {
+        // Collection traversal must agree with the Sequence iterator,
+        // including nil-car skipping and dropping the atom cdr of a dotted pair
+        let cases: [VCons<Int>] = [
+            VCons(1, 2, 3),
+            VCons(car: .Atom(1), cdr: .Atom(2)),
+            VCons(car: nil, cdr: .Pair(VCons(car: .Atom(2), cdr: .Pair(VCons(car: nil))))),
+            VCons(),
+        ]
+        for list in cases {
+            var viaCollection = [VCons<Int>.Node]()
+            var i = list.startIndex
+            while i < list.endIndex {
+                viaCollection.append(list[i])
+                i = list.index(after: i)
+            }
+            #expect(viaCollection == Array(list))
+        }
+    }
+
+    @Test func nilCarsAreSkipped() {
+        let list = VCons<Int>(car: nil, cdr: .Pair(VCons(car: .Atom(2))))
+        #expect(list.count == 1)
+        #expect(list.first == .Atom(2))
+    }
+
+    @Test func dottedPairHasCountOne() {
+        let pair = VCons(car: .Atom(1), cdr: .Atom(2))
+        #expect(pair.count == 1)
+        #expect(pair.first == .Atom(1))
+    }
+
+    @Test func collectionAlgorithms() {
+        let list = VCons(1, 2, 3, 4)
+        #expect(Array(list.dropFirst()) == [.Atom(2), .Atom(3), .Atom(4)])
+        #expect(Array(list.prefix(2)) == [.Atom(1), .Atom(2)])
+        #expect(Array(list.suffix(1)) == [.Atom(4)])
+        #expect(list.firstIndex(of: .Atom(3)).map { list[$0] } == .Atom(3))
+    }
+}
+
+@Suite struct IntSubscriptTests {
+    @Test func getByPosition() {
+        let list = VCons(10, 20, 30)
+        #expect(list[0] == .Atom(10))
+        #expect(list[1] == .Atom(20))
+        #expect(list[2] == .Atom(30))
+    }
+
+    @Test func atomUnwrapsElement() {
+        let list = VCons(10, 20, 30)
+        #expect(list[0].atom == 10)
+        #expect(list[1].atom == 20)
+        #expect(list[0].pair == nil)
+    }
+
+    @Test func pairUnwrapsSublist() {
+        let list = VCons<Int>(1, VCons(2, 3), 4)
+        #expect(list[1].pair == VCons(2, 3))
+        #expect(list[1].pair?[0].atom == 2)
+        #expect(list[1].atom == nil)
+    }
+
+    @Test func getSkipsNilCars() {
+        let list = VCons<Int>(car: nil, cdr: .Pair(VCons(car: .Atom(2))))
+        #expect(list[0].atom == 2)
+    }
+
+    @Test func getFromDottedPair() {
+        #expect(VCons(car: .Atom(1), cdr: .Atom(2))[0].atom == 1)
+    }
+
+    @Test func setElement() {
+        var list = VCons(1, 2, 3)
+        list[1] = .Atom(20)
+        #expect(list == VCons(1, 20, 3))
+        #expect(list.description == "(1 20 3)")
+        list[0] = .Atom(10)
+        list[2] = .Atom(30)
+        #expect(list == VCons(10, 20, 30))
+    }
+
+    @Test func setSublist() {
+        var list = VCons(1, 2, 3)
+        list[1] = .Pair(VCons(8, 9))
+        #expect(list == VCons<Int>(1, VCons(8, 9), 3))
+        #expect(list.description == "(1 (8 9) 3)")
+    }
+
+    @Test func setSkipsNilCars() {
+        var list = VCons<Int>(car: nil, cdr: .Pair(VCons(car: .Atom(2))))
+        list[0] = .Atom(20)
+        #expect(list.description == "(nil 20)")
+    }
+
+    @Test func setHasValueSemantics() {
+        let original = VCons(1, 2, 3)
+        var copy = original
+        copy[1] = .Atom(20)
+        #expect(original == VCons(1, 2, 3))
+        #expect(copy == VCons(1, 20, 3))
     }
 }
