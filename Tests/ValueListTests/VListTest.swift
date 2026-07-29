@@ -205,6 +205,103 @@ import Testing
         #expect(viaCollection == Array(list))
     }
 
+    @Test func equatable() {
+        #expect(VList(1, 2, 3) == VList(1, 2, 3))
+        #expect(VList(1, 2, 3) != VList(1, 2, 4))
+        #expect(VList(1, 2, 3) != VList(1, 2))
+        #expect(VList(1, 2) != VList(1, 2, 3))
+        #expect(VList(42) == VList(42))
+    }
+
+    @Test func hashable() {
+        #expect(VList(1, 2, 3).hashValue == VList(1, 2, 3).hashValue)
+        let set: Set = [VList(1, 2), VList(3, 4), VList(1, 2)]
+        #expect(set.count == 2)
+    }
+
+    @Test func initFromAnySequence() {
+        #expect(VList(1...3) == VList(1, 2, 3))
+        #expect(VList([1, 2, 3].lazy.map { $0 * 10 }) == VList(10, 20, 30))
+        #expect(VList(EmptyCollection<Int>()) == nil)
+    }
+
+    @Test func last() {
+        #expect(VList(1, 2, 3).last == 3)
+        #expect(VList(42).last == 42)
+    }
+
+    @Test func subscriptByIntGet() {
+        let list = VList(10, 20, 30)
+        #expect(list[0] == 10)
+        #expect(list[1] == 20)
+        #expect(list[2] == 30)
+    }
+
+    @Test func subscriptByIntSet() {
+        var list = VList(1, 2, 3)
+        list[1] = 20
+        #expect(list == VList(1, 20, 3))
+        list[0] = 10
+        list[2] = 30
+        #expect(list == VList(10, 20, 30))
+    }
+
+    @Test func subscriptSetHasValueSemantics() {
+        let original = VList(1, 2, 3)
+        var copy = original
+        copy[2] = 30
+        #expect(original == VList(1, 2, 3))
+        #expect(copy == VList(1, 2, 30))
+    }
+
+    @Test func appendElement() {
+        var list = VList(1, 2)
+        list.append(3)
+        #expect(list == VList(1, 2, 3))
+        var single = VList(1)
+        single.append(2)
+        #expect(single == VList(1, 2))
+    }
+
+    @Test func appendContentsOf() {
+        var list = VList(1, 2)
+        list.append(contentsOf: VList(3, 4))
+        #expect(list == VList(1, 2, 3, 4))
+        list.append(contentsOf: [5, 6])
+        #expect(list == VList(1, 2, 3, 4, 5, 6))
+        list.append(contentsOf: [Int]())
+        #expect(list == VList(1, 2, 3, 4, 5, 6))
+    }
+
+    @Test func plusAndPlusEquals() {
+        #expect(VList(1, 2) + VList(3, 4) == VList(1, 2, 3, 4))
+        var list = VList(1, 2)
+        list += VList(3, 4)
+        #expect(list == VList(1, 2, 3, 4))
+        let lhs = VList(1, 2)
+        let rhs = VList(3, 4)
+        _ = lhs + rhs
+        #expect(lhs == VList(1, 2))
+        #expect(rhs == VList(3, 4))
+    }
+
+    @Test func behavesLikeArray() {
+        let list = VList(3, 1, 4, 1, 5)
+        let array = [3, 1, 4, 1, 5]
+        #expect(Array(list) == array)
+        #expect(list.count == array.count)
+        #expect(list.first == array.first)
+        #expect(list.last == array.last)
+        #expect(list[2] == array[2])
+        #expect(list.sorted() == array.sorted())
+        #expect(list.map { $0 * 2 } == array.map { $0 * 2 })
+        #expect(list.filter { $0 > 2 } == array.filter { $0 > 2 })
+        #expect(list.contains(5) == array.contains(5))
+        #expect(list.max() == array.max())
+        #expect(Array(list.reversed()) == array.reversed())
+        #expect(Array(VList(1, 2) + VList(3, 4)) == [1, 2] + [3, 4])
+    }
+
     @Test func valueSemantics() {
         let original = VList(car: 1, cdr: VList(car: 2))
         var copy = original
