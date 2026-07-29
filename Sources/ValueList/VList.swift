@@ -57,12 +57,14 @@ public struct VList<Element> {
 }
 extension VList {
     /// An empty sequence yields the empty list.
+    /// Builds in order in a single pass, one cell per element.
     public init<S: Sequence>(_ elements: S) where S.Element == Element {
-        var result = Self()
-        for element in Array(elements).reversed() {
-            result = Self(car: element, cdr: result)
+        var iterator = elements.makeIterator()
+        func build() -> Self? {
+            guard let element = iterator.next() else { return nil }
+            return Self(car: element, cdr: build())
         }
-        self = result
+        self = build() ?? Self()
     }
     /// Concrete overload so VList([1, 2, 3]) binds Element to Int —
     /// without it the variadic init would win with Element = [Int].
@@ -176,19 +178,29 @@ extension VList {
             }
         }
     }
+    /// Bounds of `range` within this list, trapping out of bounds like Array.
+    private func bounds<R: RangeExpression>(of range: R) -> Range<Int> where R.Bound == Int {
+        let count = self.count
+        let bounds = range.relative(to: 0..<count)
+        precondition(bounds.lowerBound >= 0 && bounds.upperBound <= count,
+                     "range out of bounds")
+        return bounds
+    }
     /// Range subscripting like Array's: list[1..<3], list[1...3], list[1...],
     /// list[..<2], list[...2]. Returns a VList rather than a slice; the setter
     /// replaces the range and may resize, like Array's replaceSubrange.
-    /// O(count) — goes through Array; traps on out-of-bounds like Array.
+    /// O(count); traps on out-of-bounds like Array.
     public subscript<R: RangeExpression>(range: R) -> Self where R.Bound == Int {
         get {
-            let elements = Array(self)
-            return Self(elements[range.relative(to: elements)])
+            let bounds = self.bounds(of: range)
+            return Self(dropFirst(bounds.lowerBound).prefix(bounds.count))
         }
         set {
-            var elements = Array(self)
-            elements.replaceSubrange(range.relative(to: elements), with: newValue)
-            self = Self(elements)
+            let bounds = self.bounds(of: range)
+            var result = Self(prefix(bounds.lowerBound))
+            result.append(contentsOf: newValue)
+            result.append(contentsOf: dropFirst(bounds.upperBound))
+            self = result
         }
     }
     public subscript(_: UnboundedRange) -> Self {
@@ -232,23 +244,46 @@ extension VList {
 // versions remain reachable where the context asks for one, as in
 // let a: [Int] = list.map { ... }.
 extension VList {
+    /// One pass prepending — reversal is the direction a linked list
+    /// naturally builds in, so no extra pass is needed here.
+    public func reversed() -> Self {
+        var result = Self()
+        for element in self {
+            result = Self(car: element, cdr: result)
+        }
+        return result
+    }
+    // The transformations below recurse down the cdr chain, consing each
+    // transformed car onto the recursively built tail: in order, one cell
+    // per output element, no reversal pass. Each level applies its closure
+    // before recursing so side effects run front-to-back.
     public func map<T>(_ transform: (Element) throws -> T) rethrows -> VList<T> {
-        return VList<T>(try Array(self).map(transform))
+        guard let car = car else { return VList<T>() }
+        return VList<T>(car: try transform(car), cdr: try cdr?.map(transform))
     }
     public func filter(_ isIncluded: (Element) throws -> Bool) rethrows -> Self {
-        return Self(try Array(self).filter(isIncluded))
+        guard let car = car else { return Self() }
+        let included = try isIncluded(car)
+        let rest = try cdr?.filter(isIncluded)
+        return included ? Self(car: car, cdr: rest) : rest ?? Self()
     }
     public func compactMap<T>(_ transform: (Element) throws -> T?) rethrows -> VList<T> {
-        return VList<T>(try Array(self).compactMap(transform))
+        guard let car = car else { return VList<T>() }
+        let transformed = try transform(car)
+        let rest = try cdr?.compactMap(transform)
+        guard let transformed else { return rest ?? VList<T>() }
+        return VList<T>(car: transformed, cdr: rest)
     }
     public func flatMap<S: Sequence>(_ transform: (Element) throws -> S) rethrows -> VList<S.Element> {
-        return VList<S.Element>(try Array(self).flatMap(transform))
+        guard let car = car else { return VList<S.Element>() }
+        let head = VList<S.Element>(try transform(car))
+        let rest = try cdr?.flatMap(transform) ?? VList<S.Element>()
+        return head + rest
     }
+    /// Sorting is the one honest Array round-trip: a comparison sort
+    /// needs random access, which a linked spine cannot offer.
     public func sorted(by areInIncreasingOrder: (Element, Element) throws -> Bool) rethrows -> Self {
         return Self(try Array(self).sorted(by: areInIncreasingOrder))
-    }
-    public func reversed() -> Self {
-        return Self(Array(self).reversed())
     }
 }
 extension VList where Element: Comparable {
