@@ -323,6 +323,45 @@ import Testing
         #expect(copy == VList(1, 2, 30))
     }
 
+    @Test func rangeSubscriptGet() {
+        let list = VList(0, 1, 2, 3, 4)
+        #expect(list[1..<3] == VList(1, 2))
+        #expect(list[1...3] == VList(1, 2, 3))
+        #expect(list[2...] == VList(2, 3, 4))
+        #expect(list[..<2] == VList(0, 1))
+        #expect(list[...2] == VList(0, 1, 2))
+        #expect(list[...] == list)
+        #expect(list[1..<1].isEmpty)
+    }
+
+    @Test func rangeSubscriptMatchesArray() {
+        let list = VList(0, 1, 2, 3, 4)
+        let array = [0, 1, 2, 3, 4]
+        #expect(Array(list[1..<4]) == Array(array[1..<4]))
+        #expect(Array(list[2...]) == Array(array[2...]))
+        #expect(Array(list[...1]) == Array(array[...1]))
+    }
+
+    @Test func rangeSubscriptSet() {
+        var list = VList(0, 1, 2, 3, 4)
+        list[1..<3] = VList(9)
+        #expect(list == VList(0, 9, 3, 4))          // shrinks like replaceSubrange
+        list[1..<2] = VList(1, 2)
+        #expect(list == VList(0, 1, 2, 3, 4))       // grows back
+        list[3...] = VList<Int>()
+        #expect(list == VList(0, 1, 2))             // empty replacement removes
+        list[...] = VList(7, 8)
+        #expect(list == VList(7, 8))
+    }
+
+    @Test func rangeSubscriptSetHasValueSemantics() {
+        let original = VList(1, 2, 3)
+        var copy = original
+        copy[0..<2] = VList(9)
+        #expect(original == VList(1, 2, 3))
+        #expect(copy == VList(9, 3))
+    }
+
     @Test func appendElement() {
         var list = VList(1, 2)
         list.append(3)

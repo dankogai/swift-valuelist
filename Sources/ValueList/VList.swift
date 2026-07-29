@@ -176,6 +176,25 @@ extension VList {
             }
         }
     }
+    /// Range subscripting like Array's: list[1..<3], list[1...3], list[1...],
+    /// list[..<2], list[...2]. Returns a VList rather than a slice; the setter
+    /// replaces the range and may resize, like Array's replaceSubrange.
+    /// O(count) — goes through Array; traps on out-of-bounds like Array.
+    public subscript<R: RangeExpression>(range: R) -> VList<Element> where R.Bound == Int {
+        get {
+            let elements = Array(self)
+            return VList(elements[range.relative(to: elements)])
+        }
+        set {
+            var elements = Array(self)
+            elements.replaceSubrange(range.relative(to: elements), with: newValue)
+            self = VList(elements)
+        }
+    }
+    public subscript(_: UnboundedRange) -> VList<Element> {
+        get { return self }
+        set { self = newValue }
+    }
 }
 extension VList {
     /// Splices `list` at the end — concatenation, like Array's append(contentsOf:).
