@@ -41,7 +41,7 @@ extension VCons {
         guard let first = nodes.first else { return }
         var cdr:Node? = nil
         for node in nodes.dropFirst().reversed() {
-            cdr = .Pair(VCons(car:node, cdr:cdr))
+            cdr = .Pair(Self(car:node, cdr:cdr))
         }
         self.car = first
         self.cdr = cdr
@@ -54,14 +54,14 @@ extension VCons {
     }
     /// A list of sublists, e.g. VCons(VCons(1, 2), VCons(3, 4)) == ((1 2) (3 4)) —
     /// inferred as VCons<Int>, not the absurd VCons<VCons<Int>>.
-    public init(_ values:VCons<Element> ...) {
+    public init(_ values:Self ...) {
         self.init(nodes:values.map{ .Pair($0) })
     }
     /// Converts `value` to a Node: a `VCons` becomes .Pair, a `Node` passes
     /// through, an `Element` becomes .Atom; anything else is a programmer error.
     internal static func node(of value:Any) -> Node {
         switch value {
-        case let cons as VCons<Element>: return .Pair(cons)
+        case let cons as Self: return .Pair(cons)
         case let node as Node:           return node
         case let element as Element:     return .Atom(element)
         default:
@@ -89,7 +89,7 @@ extension VCons {
             return
         }
         if cdr == nil {
-            cdr = .Pair(VCons(car:node))
+            cdr = .Pair(Self(car:node))
         } else if var next = cdr?.pair {
             next.append(node:node)
             cdr = .Pair(next)
@@ -101,7 +101,7 @@ extension VCons {
         append(node:.Atom(element))
     }
     /// Appends `cons` as a sublist, e.g. (1 2) appended (3 4) == (1 2 (3 4)).
-    public mutating func append(_ cons:VCons<Element>) {
+    public mutating func append(_ cons:Self) {
         append(node:.Pair(cons))
     }
 }
@@ -112,7 +112,7 @@ extension VCons {
     }
     /// Splices `cons` at the end of the list — concatenation, not nesting:
     /// (1 2) appended contentsOf (3 4) == (1 2 3 4).
-    public mutating func append(contentsOf cons:VCons<Element>) {
+    public mutating func append(contentsOf cons:Self) {
         guard !cons.isEmpty else { return }
         if isEmpty {
             self = cons
@@ -128,15 +128,15 @@ extension VCons {
         }
     }
     public mutating func append<S:Sequence>(contentsOf values:S) where S.Element == Element {
-        append(contentsOf:VCons(nodes:values.map{ .Atom($0) }))
+        append(contentsOf:Self(nodes:values.map{ .Atom($0) }))
     }
     /// Concatenates two lists, e.g. (1 2) + (3 4) == (1 2 3 4).
-    public static func +(lhs:VCons<Element>, rhs:VCons<Element>) -> VCons<Element> {
+    public static func +(lhs:Self, rhs:Self) -> Self {
         var result = lhs
         result.append(contentsOf:rhs)
         return result
     }
-    public static func +=(lhs:inout VCons<Element>, rhs:VCons<Element>) {
+    public static func +=(lhs:inout Self, rhs:Self) {
         lhs.append(contentsOf:rhs)
     }
 }
@@ -166,12 +166,12 @@ extension VCons: CustomStringConvertible {
 }
 
 extension VCons.Node: Equatable where Element: Equatable {
-    public static func ==(lhs: VCons<Element>.Node, rhs: VCons<Element>.Node) -> Bool {
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
         return lhs.atom == rhs.atom && lhs.pair == rhs.pair
     }
 }
 extension VCons: Equatable where Element: Equatable {
-    public static func ==(lhs: VCons<Element>, rhs: VCons<Element>) -> Bool {
+    public static func ==(lhs: Self, rhs: Self) -> Bool {
         return lhs.car == rhs.car && lhs.cdr == rhs.cdr
     }
 }
@@ -207,7 +207,7 @@ extension VCons: Collection {
     }
     /// The first cell at or after `cons` whose car is non-nil,
     /// matching the Iterator's nil-car skipping.
-    private static func firstOccupied(_ cons:VCons<Element>?, offset:Int) -> Index {
+    private static func firstOccupied(_ cons:Self?, offset:Int) -> Index {
         var cons = cons
         var offset = offset
         while let current = cons {
