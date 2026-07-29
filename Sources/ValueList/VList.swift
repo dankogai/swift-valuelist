@@ -9,76 +9,96 @@
 
 public struct VList<Element> {
     /// A struct cannot store itself — its size would be infinite — and
-    /// `indirect` exists only for enums, so the recursion is routed
-    /// through this heap-boxed link; value semantics are preserved.
-    private indirect enum Link {
+    /// `indirect` exists only for enums, so the cell is heap-boxed here;
+    /// .Nil doubles as the empty list. Value semantics are preserved.
+    private indirect enum Node {
         case Nil
-        case Next(VList<Element>)
+        case Cell(car: Element, cdr: VList<Element>)
     }
-    private var link: Link = .Nil
-    public var car: Element
-    public var cdr: VList<Element>? {
+    private var node: Node = .Nil
+    /// The empty list.
+    public init() {}
+    public init(car: Element, cdr: VList<Element>? = nil) {
+        node = .Cell(car: car, cdr: cdr ?? VList())
+    }
+    public var isEmpty: Bool {
+        if case .Nil = node { return true } else { return false }
+    }
+    /// nil iff the list is empty.
+    public var car: Element? {
         get {
-            if case .Next(let list) = link { return list } else { return nil }
+            if case .Cell(let car, _) = node { return car }
+            return nil
         }
         set {
-            link = newValue.map { .Next($0) } ?? .Nil
+            switch (newValue, node) {
+            case (nil, _):
+                node = .Nil     // removing the car drops the tail with it
+            case (let car?, .Cell(_, let cdr)):
+                node = .Cell(car: car, cdr: cdr)
+            case (let car?, .Nil):
+                node = .Cell(car: car, cdr: VList())
+            }
         }
     }
-    public init(car: Element, cdr: VList<Element>? = nil) {
-        self.car = car
-        self.cdr = cdr
+    /// nil when the list is empty or has a single element.
+    public var cdr: VList<Element>? {
+        get {
+            if case .Cell(_, let cdr) = node, !cdr.isEmpty { return cdr }
+            return nil
+        }
+        set {
+            guard case .Cell(let car, _) = node else {
+                preconditionFailure("an empty VList has no cdr")
+            }
+            node = .Cell(car: car, cdr: newValue ?? VList())
+        }
     }
 }
 extension VList {
-    /// Fails on an empty sequence — a VList always has at least a car.
-    public init?<S: Sequence>(_ elements: S) where S.Element == Element {
-        let elements = Array(elements)
-        guard let first = elements.first else { return nil }
-        var cdr: VList<Element>? = nil
-        for element in elements.dropFirst().reversed() {
-            cdr = VList(car: element, cdr: cdr)
+    /// An empty sequence yields the empty list.
+    public init<S: Sequence>(_ elements: S) where S.Element == Element {
+        var result = VList()
+        for element in Array(elements).reversed() {
+            result = VList(car: element, cdr: result)
         }
-        self.init(car: first, cdr: cdr)
+        self = result
     }
     /// Concrete overload so VList([1, 2, 3]) binds Element to Int —
     /// without it the variadic init would win with Element = [Int].
-    public init?(_ elements: [Element]) {
+    public init(_ elements: [Element]) {
         self.init(elements[...])
     }
-    /// VList(1, 2, 3) — the required first argument makes an empty
-    /// VList unrepresentable at compile time.
-    public init(_ first: Element, _ rest: Element...) {
-        self.init(car: first, cdr: VList(rest))
+    /// VList(1, 2, 3); with no arguments, the empty list.
+    public init(_ elements: Element...) {
+        self.init(elements[...])
+    }
+}
+extension VList: ExpressibleByArrayLiteral {
+    public init(arrayLiteral elements: Element...) {
+        self.init(elements[...])
     }
 }
 extension VList: CustomStringConvertible {
-    /// Lisp notation, e.g. VList(1, 2, 3) prints as (1 2 3).
-    /// Iterative so long lists cannot overflow the stack.
+    /// Lisp notation, e.g. VList(1, 2, 3) prints as (1 2 3); () when empty.
     public var description: String {
-        var elements = [String]()
-        var list: VList<Element>? = self
-        while let current = list {
-            elements.append("\(current.car)")
-            list = current.cdr
-        }
-        return "(" + elements.joined(separator: " ") + ")"
+        return "(" + self.map { "\($0)" }.joined(separator: " ") + ")"
     }
 }
-extension VList:Sequence {
+extension VList: Sequence {
     public struct Iterator: IteratorProtocol {
         var list: VList<Element>?
         public mutating func next() -> Element? {
-            guard let current = list else { return nil }
+            guard let current = list, let car = current.car else { return nil }
             list = current.cdr
-            return current.car
+            return car
         }
     }
     public func makeIterator() -> Iterator {
         return Iterator(list: self)
     }
 }
-extension VList:Collection {
+extension VList: Collection {
     /// Wraps the remaining list so that index(after:) is O(1);
     /// `offset` orders indices for Comparable, with Int.max as endIndex.
     public struct Index: Comparable {
@@ -92,16 +112,16 @@ extension VList:Collection {
         }
     }
     public var startIndex: Index {
-        return Index(offset: 0, list: self)
+        return isEmpty ? endIndex : Index(offset: 0, list: self)
     }
     public var endIndex: Index {
         return Index(offset: Int.max, list: nil)
     }
     public subscript(position: Index) -> Element {
-        guard let list = position.list else {
+        guard let car = position.list?.car else {
             preconditionFailure("index out of bounds")
         }
-        return list.car
+        return car
     }
     public func index(after i: Index) -> Index {
         guard let list = i.list else {
@@ -113,10 +133,7 @@ extension VList:Collection {
 }
 // Array compatibility. Only what Sequence/Collection defaults cannot provide:
 // map, filter, contains, firstIndex(of:), sorted(), min/max, dropFirst,
-// prefix/suffix and friends all come for free. The removal family
-// (remove(at:), removeFirst, popLast, …) is deliberately absent — removing
-// the only element would produce an empty VList, which is unrepresentable —
-// as is ExpressibleByArrayLiteral, whose empty literal [] could only trap.
+// prefix/suffix and friends all come for free.
 extension VList: Equatable where Element: Equatable {
     public static func == (lhs: VList<Element>, rhs: VList<Element>) -> Bool {
         return lhs.car == rhs.car && lhs.cdr == rhs.cdr
@@ -128,8 +145,9 @@ extension VList: Hashable where Element: Hashable {
     }
 }
 extension VList {
-    /// Non-optional, unlike Array's — a VList is never empty. O(count).
-    public var last: Element {
+    /// Like Array's last: nil when empty. O(count).
+    public var last: Element? {
+        guard !isEmpty else { return nil }
         var current = self
         while let next = current.cdr { current = next }
         return current.car
@@ -137,6 +155,7 @@ extension VList {
     /// Replaces the car of the `position`-th cell;
     /// returns false when the list is shorter than that.
     private mutating func replaceCar(at position: Int, with element: Element) -> Bool {
+        guard !isEmpty else { return false }
         if position == 0 {
             car = element
             return true
@@ -161,6 +180,11 @@ extension VList {
 extension VList {
     /// Splices `list` at the end — concatenation, like Array's append(contentsOf:).
     public mutating func append(contentsOf list: VList<Element>) {
+        guard !list.isEmpty else { return }
+        if isEmpty {
+            self = list
+            return
+        }
         if var next = cdr {
             next.append(contentsOf: list)
             cdr = next
@@ -169,8 +193,7 @@ extension VList {
         }
     }
     public mutating func append<S: Sequence>(contentsOf newElements: S) where S.Element == Element {
-        guard let list = VList(newElements) else { return }
-        append(contentsOf: list)
+        append(contentsOf: VList(newElements))
     }
     public mutating func append(_ element: Element) {
         append(contentsOf: VList(car: element))
@@ -183,5 +206,30 @@ extension VList {
     }
     public static func += (lhs: inout VList<Element>, rhs: VList<Element>) {
         lhs.append(contentsOf: rhs)
+    }
+}
+extension VList {
+    /// Like Array's: traps on an empty list.
+    @discardableResult
+    public mutating func removeFirst() -> Element {
+        guard let car = car else {
+            preconditionFailure("cannot removeFirst from an empty VList")
+        }
+        self = cdr ?? VList()
+        return car
+    }
+    /// Like Array's: traps when position is out of bounds.
+    @discardableResult
+    public mutating func remove(at position: Int) -> Element {
+        if position == 0 { return removeFirst() }
+        guard position > 0, var next = cdr else {
+            preconditionFailure("index out of bounds")
+        }
+        let removed = next.remove(at: position - 1)
+        cdr = next
+        return removed
+    }
+    public mutating func removeAll() {
+        self = VList()
     }
 }
