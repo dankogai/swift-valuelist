@@ -83,20 +83,21 @@ import Testing
 
     @Test func initFromArray() {
         let list = VList([1, 2, 3])
-        #expect(list?.car == 1)
-        #expect(list?.cdr?.car == 2)
-        #expect(list?.cdr?.cdr?.car == 3)
-        #expect(list?.cdr?.cdr?.cdr == nil)
+        #expect(list.car == 1)
+        #expect(list.cdr?.car == 2)
+        #expect(list.cdr?.cdr?.car == 3)
+        #expect(list.cdr?.cdr?.cdr == nil)
     }
 
-    @Test func initFromEmptyArrayFails() {
-        #expect(VList<Int>([]) == nil)
+    @Test func initFromEmptyArrayIsEmpty() {
+        #expect(VList<Int>([]).isEmpty)
+        #expect(VList<Int>([]) == VList<Int>())
     }
 
     @Test func initFromSingleElementArray() {
         let list = VList([42])
-        #expect(list?.car == 42)
-        #expect(list?.cdr == nil)
+        #expect(list.car == 42)
+        #expect(list.cdr == nil)
     }
 
     @Test func variadicInit() {
@@ -106,6 +107,74 @@ import Testing
         #expect(list.cdr?.cdr?.car == 3)
         #expect(list.cdr?.cdr?.cdr == nil)
         #expect(VList(42).cdr == nil)
+        #expect(VList<Int>().isEmpty)
+    }
+
+    @Test func emptyList() {
+        let empty = VList<Int>()
+        #expect(empty.isEmpty)
+        #expect(empty.car == nil)
+        #expect(empty.cdr == nil)
+        #expect(empty.count == 0)
+        #expect(empty.first == nil)
+        #expect(empty.last == nil)
+        #expect(empty.description == "()")
+        #expect(Array(empty).isEmpty)
+        #expect(empty.startIndex == empty.endIndex)
+    }
+
+    @Test func arrayLiteral() {
+        let list: VList = [1, 2, 3]
+        #expect(list == VList(1, 2, 3))
+        let empty: VList<Int> = []
+        #expect(empty.isEmpty)
+    }
+
+    @Test func settingCarNilEmptiesTheList() {
+        var list = VList(1, 2, 3)
+        list.car = nil
+        #expect(list.isEmpty)
+        var single = VList<Int>()
+        single.car = 42     // a car on an empty list makes it single-element
+        #expect(single == VList(42))
+    }
+
+    @Test func appendOntoEmpty() {
+        var list = VList<Int>()
+        list.append(1)
+        #expect(list == VList(1))
+        var viaContents = VList<Int>()
+        viaContents.append(contentsOf: VList(1, 2))
+        #expect(viaContents == VList(1, 2))
+        #expect(VList<Int>() + VList(1, 2) == VList(1, 2))
+        #expect(VList(1, 2) + VList<Int>() == VList(1, 2))
+    }
+
+    @Test func removeFirst() {
+        var list = VList(1, 2, 3)
+        #expect(list.removeFirst() == 1)
+        #expect(list == VList(2, 3))
+        #expect(list.removeFirst() == 2)
+        #expect(list.removeFirst() == 3)
+        #expect(list.isEmpty)
+    }
+
+    @Test func removeAt() {
+        var list = VList(1, 2, 3, 4)
+        #expect(list.remove(at: 1) == 2)
+        #expect(list == VList(1, 3, 4))
+        #expect(list.remove(at: 2) == 4)
+        #expect(list == VList(1, 3))
+        #expect(list.remove(at: 0) == 1)
+        #expect(list == VList(3))
+        #expect(list.remove(at: 0) == 3)
+        #expect(list.isEmpty)
+    }
+
+    @Test func removeAll() {
+        var list = VList(1, 2, 3)
+        list.removeAll()
+        #expect(list.isEmpty)
     }
 
     @Test func variadicMatchesManualConstruction() {
@@ -222,7 +291,7 @@ import Testing
     @Test func initFromAnySequence() {
         #expect(VList(1...3) == VList(1, 2, 3))
         #expect(VList([1, 2, 3].lazy.map { $0 * 10 }) == VList(10, 20, 30))
-        #expect(VList(EmptyCollection<Int>()) == nil)
+        #expect(VList(EmptyCollection<Int>()) == VList<Int>())
     }
 
     @Test func last() {
