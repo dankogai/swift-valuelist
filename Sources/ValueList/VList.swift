@@ -18,8 +18,8 @@ public struct VList<Element> {
     private var node: Node = .Nil
     /// The empty list.
     public init() {}
-    public init(car: Element, cdr: VList<Element>? = nil) {
-        node = .Cell(car: car, cdr: cdr ?? VList())
+    public init(car: Element, cdr: Self? = nil) {
+        node = .Cell(car: car, cdr: cdr ?? Self())
     }
     public var isEmpty: Bool {
         if case .Nil = node { return true } else { return false }
@@ -37,12 +37,12 @@ public struct VList<Element> {
             case (let car?, .Cell(_, let cdr)):
                 node = .Cell(car: car, cdr: cdr)
             case (let car?, .Nil):
-                node = .Cell(car: car, cdr: VList())
+                node = .Cell(car: car, cdr: Self())
             }
         }
     }
     /// nil when the list is empty or has a single element.
-    public var cdr: VList<Element>? {
+    public var cdr: Self? {
         get {
             if case .Cell(_, let cdr) = node, !cdr.isEmpty { return cdr }
             return nil
@@ -51,16 +51,16 @@ public struct VList<Element> {
             guard case .Cell(let car, _) = node else {
                 preconditionFailure("an empty VList has no cdr")
             }
-            node = .Cell(car: car, cdr: newValue ?? VList())
+            node = .Cell(car: car, cdr: newValue ?? Self())
         }
     }
 }
 extension VList {
     /// An empty sequence yields the empty list.
     public init<S: Sequence>(_ elements: S) where S.Element == Element {
-        var result = VList()
+        var result = Self()
         for element in Array(elements).reversed() {
-            result = VList(car: element, cdr: result)
+            result = Self(car: element, cdr: result)
         }
         self = result
     }
@@ -132,10 +132,10 @@ extension VList: Collection {
     }
 }
 // Array compatibility. Only what Sequence/Collection defaults cannot provide:
-// map, filter, contains, firstIndex(of:), sorted(), min/max, dropFirst,
-// prefix/suffix and friends all come for free.
+// contains, firstIndex(of:), min/max, dropFirst, prefix/suffix and friends
+// all come for free.
 extension VList: Equatable where Element: Equatable {
-    public static func == (lhs: VList<Element>, rhs: VList<Element>) -> Bool {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
         return lhs.car == rhs.car && lhs.cdr == rhs.cdr
     }
 }
@@ -180,25 +180,25 @@ extension VList {
     /// list[..<2], list[...2]. Returns a VList rather than a slice; the setter
     /// replaces the range and may resize, like Array's replaceSubrange.
     /// O(count) — goes through Array; traps on out-of-bounds like Array.
-    public subscript<R: RangeExpression>(range: R) -> VList<Element> where R.Bound == Int {
+    public subscript<R: RangeExpression>(range: R) -> Self where R.Bound == Int {
         get {
             let elements = Array(self)
-            return VList(elements[range.relative(to: elements)])
+            return Self(elements[range.relative(to: elements)])
         }
         set {
             var elements = Array(self)
             elements.replaceSubrange(range.relative(to: elements), with: newValue)
-            self = VList(elements)
+            self = Self(elements)
         }
     }
-    public subscript(_: UnboundedRange) -> VList<Element> {
+    public subscript(_: UnboundedRange) -> Self {
         get { return self }
         set { self = newValue }
     }
 }
 extension VList {
     /// Splices `list` at the end — concatenation, like Array's append(contentsOf:).
-    public mutating func append(contentsOf list: VList<Element>) {
+    public mutating func append(contentsOf list: Self) {
         guard !list.isEmpty else { return }
         if isEmpty {
             self = list
@@ -212,19 +212,48 @@ extension VList {
         }
     }
     public mutating func append<S: Sequence>(contentsOf newElements: S) where S.Element == Element {
-        append(contentsOf: VList(newElements))
+        append(contentsOf: Self(newElements))
     }
     public mutating func append(_ element: Element) {
-        append(contentsOf: VList(car: element))
+        append(contentsOf: Self(car: element))
     }
     /// Concatenates two lists, e.g. (1 2) + (3 4) == (1 2 3 4).
-    public static func + (lhs: VList<Element>, rhs: VList<Element>) -> VList<Element> {
+    public static func + (lhs: Self, rhs: Self) -> Self {
         var result = lhs
         result.append(contentsOf: rhs)
         return result
     }
-    public static func += (lhs: inout VList<Element>, rhs: VList<Element>) {
+    public static func += (lhs: inout Self, rhs: Self) {
         lhs.append(contentsOf: rhs)
+    }
+}
+// VList-returning transformations. These shadow the Sequence defaults in
+// member lookup, so list.map { ... } stays a VList; the Array-returning
+// versions remain reachable where the context asks for one, as in
+// let a: [Int] = list.map { ... }.
+extension VList {
+    public func map<T>(_ transform: (Element) throws -> T) rethrows -> VList<T> {
+        return VList<T>(try Array(self).map(transform))
+    }
+    public func filter(_ isIncluded: (Element) throws -> Bool) rethrows -> Self {
+        return Self(try Array(self).filter(isIncluded))
+    }
+    public func compactMap<T>(_ transform: (Element) throws -> T?) rethrows -> VList<T> {
+        return VList<T>(try Array(self).compactMap(transform))
+    }
+    public func flatMap<S: Sequence>(_ transform: (Element) throws -> S) rethrows -> VList<S.Element> {
+        return VList<S.Element>(try Array(self).flatMap(transform))
+    }
+    public func sorted(by areInIncreasingOrder: (Element, Element) throws -> Bool) rethrows -> Self {
+        return Self(try Array(self).sorted(by: areInIncreasingOrder))
+    }
+    public func reversed() -> Self {
+        return Self(Array(self).reversed())
+    }
+}
+extension VList where Element: Comparable {
+    public func sorted() -> Self {
+        return Self(Array(self).sorted())
     }
 }
 extension VList {
@@ -234,7 +263,7 @@ extension VList {
         guard let car = car else {
             preconditionFailure("cannot removeFirst from an empty VList")
         }
-        self = cdr ?? VList()
+        self = cdr ?? Self()
         return car
     }
     /// Like Array's: traps when position is out of bounds.
@@ -249,6 +278,6 @@ extension VList {
         return removed
     }
     public mutating func removeAll() {
-        self = VList()
+        self = Self()
     }
 }

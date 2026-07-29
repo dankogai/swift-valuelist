@@ -362,6 +362,39 @@ import Testing
         #expect(copy == VList(9, 3))
     }
 
+    @Test func transformationsReturnVList() {
+        let list = VList(3, 1, 2)
+        #expect(list.map { $0 * 10 } == VList(30, 10, 20))
+        #expect(list.filter { $0 > 1 } == VList(3, 2))
+        #expect(list.sorted() == VList(1, 2, 3))
+        #expect(list.sorted(by: >) == VList(3, 2, 1))
+        #expect(list.reversed() == VList(2, 1, 3))
+        #expect(VList("1", "x", "2").compactMap { Int($0) } == VList(1, 2))
+        #expect(VList(1, 2).flatMap { [$0, $0] } == VList(1, 1, 2, 2))
+    }
+
+    @Test func transformationsChain() {
+        let result = VList(5, 3, 1, 4, 2)
+            .filter { $0 > 1 }
+            .map { $0 * 10 }
+            .sorted()
+        #expect(result == VList(20, 30, 40, 50))
+    }
+
+    @Test func transformationsOnEmpty() {
+        let empty = VList<Int>()
+        #expect(empty.map { $0 * 2 }.isEmpty)
+        #expect(empty.filter { _ in true }.isEmpty)
+        #expect(empty.reversed().isEmpty)
+    }
+
+    @Test func arrayReturningVersionsRemainReachable() {
+        let list = VList(1, 2, 3)
+        let viaContext: [Int] = list.map { $0 * 2 }
+        #expect(viaContext == [2, 4, 6])
+        #expect(list.map { $0 * 2 } == [2, 4, 6].map { $0 })
+    }
+
     @Test func appendElement() {
         var list = VList(1, 2)
         list.append(3)
