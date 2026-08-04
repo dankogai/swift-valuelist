@@ -459,3 +459,47 @@ import Testing
         #expect(copy == VCons(1, 20, 3))
     }
 }
+
+@Suite struct PrependReverseTests {
+    @Test func prependOntoEmptyFillsCar() {
+        var list = VCons<Int>()
+        list.prepend(.Atom(1))
+        #expect(list == VCons(1))
+        #expect(list.description == "(1)")
+    }
+
+    @Test func prependGrowsAtTheHead() {
+        var list = VCons(2, 3)
+        list.prepend(.Atom(1))
+        #expect(list == VCons(1, 2, 3))
+        list.prepend(.Pair(VCons(0)))
+        #expect(list.description == "((0) 1 2 3)")
+    }
+
+    @Test func prependedLeavesOriginalUntouched() {
+        let original = VCons(2, 3)
+        let grown = original.prepended(.Atom(1))
+        #expect(original == VCons(2, 3))
+        #expect(grown == VCons(1, 2, 3))
+    }
+
+    @Test func reversedProperList() {
+        #expect(VCons(1, 2, 3).reversed() == VCons(3, 2, 1))
+        #expect(VCons(42).reversed() == VCons(42))
+        #expect(VCons<Int>().reversed() == VCons<Int>())
+    }
+
+    @Test func reversedPreservesNilCarCells() {
+        // (1 nil 2) reversed is (2 nil 1) — the hole survives
+        let list = VCons<Int>(car: .Atom(1),
+                              cdr: .Pair(VCons(car: nil,
+                                               cdr: .Pair(VCons(car: .Atom(2))))))
+        #expect(list.reversed().description == "(2 nil 1)")
+    }
+
+    @Test func reverseInPlace() {
+        var list = VCons(1, 2, 3)
+        list.reverse()
+        #expect(list == VCons(3, 2, 1))
+    }
+}

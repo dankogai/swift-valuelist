@@ -13,16 +13,46 @@ public struct VCons<Element> {
         case Atom(Element)
         case Pair(VCons<Element>)
     }
+    //
     public var car:Node? = nil
     public var cdr:Node? = nil
-    //
-    public init() {
-        car = nil
-        cdr = nil
-    }
+    public init() {}
     public init(car:Node? = nil, cdr:Node? = nil) {
         self.car = car
         self.cdr = cdr
+    }
+}
+
+extension VCons {
+    public var isEmpty:Bool {
+        return car == nil && cdr == nil
+    }
+    /// O(1) — the natural way to grow a list. Prepending onto the empty
+    /// list fills its car, so (cons x ()) == (x), not (x nil).
+    public mutating func prepend(_ node:Node) {
+        self = isEmpty ? Self(car:node) : Self(car:node, cdr:.Pair(self))
+    }
+    public func prepended(_ node:Node) -> Self {
+        var copy = self
+        copy.prepend(node)
+        return copy
+    }
+    /// Cell-preserving reversal, e.g. (1 nil 2) reversed == (2 nil 1);
+    /// reversing an improper list is a programmer error.
+    public func reversed() -> Self {
+        var result:Self? = nil
+        var current:Self? = self
+        while let cell = current {
+            guard cell.cdr?.atom == nil else {
+                preconditionFailure("cannot reverse an improper list")
+            }
+            result = Self(car:cell.car, cdr:result.map{ .Pair($0) })
+            current = cell.cdr?.pair
+        }
+        return result ?? Self()
+    }
+    public mutating func reverse() {
+        self = reversed()
     }
 }
 
@@ -36,15 +66,13 @@ extension VCons.Node {
 }
 
 extension VCons {
+    /// Builds in a single pass: an Array can be walked backwards, and its
+    /// reversed() is a lazy view, so prepending needs no reverse() after.
     public init(nodes:[Node]) {
         self.init()
-        guard let first = nodes.first else { return }
-        var cdr:Node? = nil
-        for node in nodes.dropFirst().reversed() {
-            cdr = .Pair(Self(car:node, cdr:cdr))
+        for node in nodes.reversed() {
+            prepend(node)
         }
-        self.car = first
-        self.cdr = cdr
     }
     // Disfavored so that all-VCons arguments pick the sublist overload below
     // (binding Element to the inner type) instead of Element = VCons<...>.
@@ -84,18 +112,7 @@ extension VCons {
     /// An empty cons becomes a one-element list;
     /// appending to an improper list — one whose last cdr is an atom — is a programmer error.
     public mutating func append(node:Node) {
-        if car == nil && cdr == nil {
-            car = node
-            return
-        }
-        if cdr == nil {
-            cdr = .Pair(Self(car:node))
-        } else if var next = cdr?.pair {
-            next.append(node:node)
-            cdr = .Pair(next)
-        } else {
-            preconditionFailure("cannot append to an improper list")
-        }
+        append(contentsOf:Self(car:node))
     }
     public mutating func append(_ element:Element) {
         append(node:.Atom(element))
@@ -107,25 +124,23 @@ extension VCons {
 }
 
 extension VCons {
-    public var isEmpty:Bool {
-        return car == nil && cdr == nil
-    }
     /// Splices `cons` at the end of the list — concatenation, not nesting:
     /// (1 2) appended contentsOf (3 4) == (1 2 3 4).
+    /// Prepends self's cells onto `cons` back to front, via reversed() —
+    /// which is also what traps when self is improper.
     public mutating func append(contentsOf cons:Self) {
         guard !cons.isEmpty else { return }
         if isEmpty {
             self = cons
             return
         }
-        if cdr == nil {
-            cdr = .Pair(cons)
-        } else if var next = cdr?.pair {
-            next.append(contentsOf:cons)
-            cdr = .Pair(next)
-        } else {
-            preconditionFailure("cannot append to an improper list")
+        var result = cons
+        var current:Self? = reversed()
+        while let cell = current {
+            result = Self(car:cell.car, cdr:.Pair(result))
+            current = cell.cdr?.pair
         }
+        self = result
     }
     public mutating func append<S:Sequence>(contentsOf values:S) where S.Element == Element {
         append(contentsOf:Self(nodes:values.map{ .Atom($0) }))
@@ -171,8 +186,17 @@ extension VCons.Node: Equatable where Element: Equatable {
     }
 }
 extension VCons: Equatable where Element: Equatable {
+    /// Walks the spine iteratively; recursion remains only for nested
+    /// sublists in cars — inherent to a tree.
     public static func ==(lhs: Self, rhs: Self) -> Bool {
-        return lhs.car == rhs.car && lhs.cdr == rhs.cdr
+        var lhs = lhs, rhs = rhs
+        while true {
+            guard lhs.car == rhs.car else { return false }
+            if lhs.cdr == nil && rhs.cdr == nil { return true }
+            if let l = lhs.cdr?.atom, let r = rhs.cdr?.atom { return l == r }
+            guard let l = lhs.cdr?.pair, let r = rhs.cdr?.pair else { return false }
+            (lhs, rhs) = (l, r)
+        }
     }
 }
 
@@ -239,20 +263,26 @@ extension VCons: Collection {
 }
 
 extension VCons {
-    /// Replaces the car of the `position`-th occupied cell;
-    /// returns false when the list is shorter than that.
-    private mutating func replaceCar(at position:inout Int, with node:Node) -> Bool {
-        if car != nil {
-            if position == 0 {
-                car = node
-                return true
-            }
-            position -= 1
+    /// Peels cells off the front — collected in reverse into `reversedPrefix` —
+    /// until the `position`-th occupied cell is at the head;
+    /// false when the list is shorter than that.
+    private mutating func liftPrefix(_ position:Int, into reversedPrefix:inout Self?) -> Bool {
+        var remaining = position
+        while car == nil || remaining > 0 {
+            if car != nil { remaining -= 1 }
+            guard let next = cdr?.pair else { return false }
+            reversedPrefix = Self(car:car, cdr:reversedPrefix.map{ .Pair($0) })
+            self = next
         }
-        guard var next = cdr?.pair else { return false }
-        let replaced = next.replaceCar(at:&position, with:node)
-        cdr = .Pair(next)
-        return replaced
+        return true
+    }
+    /// Prepends the cells collected by liftPrefix back, restoring their order.
+    private mutating func restorePrefix(_ reversedPrefix:Self?) {
+        var current = reversedPrefix
+        while let cell = current {
+            self = Self(car:cell.car, cdr:.Pair(self))
+            current = cell.cdr?.pair
+        }
     }
     /// Array-like positional access, counting elements the way iteration does
     /// (nil cars are skipped, an atom cdr ends the list).
@@ -262,10 +292,12 @@ extension VCons {
             return self[index(startIndex, offsetBy:position)]
         }
         set {
-            var position = position
-            guard position >= 0, replaceCar(at:&position, with:newValue) else {
+            var reversedPrefix:Self? = nil
+            guard position >= 0, liftPrefix(position, into:&reversedPrefix) else {
                 preconditionFailure("index out of bounds")
             }
+            car = newValue
+            restorePrefix(reversedPrefix)
         }
     }
 }
