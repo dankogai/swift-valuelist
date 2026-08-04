@@ -300,4 +300,62 @@ extension VCons {
             restorePrefix(reversedPrefix)
         }
     }
+    /// Bounds of `range` within this list, trapping out of bounds like Array.
+    private func bounds<R:RangeExpression>(of range:R) -> Range<Int> where R.Bound == Int {
+        let count = self.count
+        let bounds = range.relative(to:0..<count)
+        precondition(bounds.lowerBound >= 0 && bounds.upperBound <= count,
+                     "range out of bounds")
+        return bounds
+    }
+    /// Range subscripting like Array's: list[1..<3], list[1...3], list[1...],
+    /// list[..<2], list[...2]. Positions count elements the way iteration does,
+    /// so the result is a proper list of the occupied nodes — nil cars and an
+    /// atom cdr do not survive the trip. The setter replaces the range and may
+    /// resize, like Array's replaceSubrange. O(count); traps like Array.
+    public subscript<R:RangeExpression>(range:R) -> Self where R.Bound == Int {
+        get {
+            let bounds = self.bounds(of:range)
+            var result = Self()
+            for node in dropFirst(bounds.lowerBound).prefix(bounds.count) {
+                result.prepend(node)
+            }
+            result.reverse()
+            return result
+        }
+        set {
+            let bounds = self.bounds(of:range)
+            var result = self[..<bounds.lowerBound]
+            result.append(contentsOf:newValue)
+            result.append(contentsOf:self[bounds.upperBound...])
+            self = result
+        }
+    }
+    public subscript(_: UnboundedRange) -> Self {
+        get { return self }
+        set { self = newValue }
+    }
+}
+
+extension VCons {
+    /// All leaf atoms of the tree, flattened into a VList in order:
+    /// (1 (2 3) 4).atoms() == (1 2 3 4), and the atom cdr of a dotted
+    /// pair is included: (1 . 2).atoms() == (1 2). Spines are walked
+    /// iteratively; recursion only descends into nested sublists in
+    /// cars — inherent to a tree, like Node.==.
+    public func atoms() -> VList<Element> {
+        var result = VList<Element>()
+        func visit(_ cons:Self) {
+            var current:Self? = cons
+            while let cell = current {
+                if let atom = cell.car?.atom { result.prepend(atom) }
+                if let sublist = cell.car?.pair { visit(sublist) }
+                if let tail = cell.cdr?.atom { result.prepend(tail) }
+                current = cell.cdr?.pair
+            }
+        }
+        visit(self)
+        result.reverse()
+        return result
+    }
 }

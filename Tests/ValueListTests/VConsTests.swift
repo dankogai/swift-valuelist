@@ -503,3 +503,75 @@ import Testing
         #expect(list == VCons(3, 2, 1))
     }
 }
+
+@Suite struct RangeSubscriptTests {
+    @Test func rangeSubscriptGet() {
+        let list = VCons(0, 1, 2, 3, 4)
+        #expect(list[1..<3] == VCons(1, 2))
+        #expect(list[1...3] == VCons(1, 2, 3))
+        #expect(list[2...] == VCons(2, 3, 4))
+        #expect(list[..<2] == VCons(0, 1))
+        #expect(list[...2] == VCons(0, 1, 2))
+        #expect(list[...] == list)
+        #expect(list[1..<1].isEmpty)
+    }
+
+    @Test func rangeSubscriptKeepsSublistNodes() {
+        let list = VCons<Int>(1, VCons(2, 3), 4)
+        #expect(list[1..<2].description == "((2 3))")
+        #expect(list[1...] == VCons<Int>(VCons(2, 3), 4))
+    }
+
+    @Test func rangeSubscriptCountsOccupiedCells() {
+        // positions follow iteration: nil cars are skipped
+        let list = VCons<Int>(car: nil, cdr: .Pair(VCons(1, 2, 3)))
+        #expect(list[0..<2] == VCons(1, 2))
+    }
+
+    @Test func rangeSubscriptSet() {
+        var list = VCons(0, 1, 2, 3, 4)
+        list[1..<3] = VCons(9)
+        #expect(list == VCons(0, 9, 3, 4))          // shrinks like replaceSubrange
+        list[1..<2] = VCons(1, 2)
+        #expect(list == VCons(0, 1, 2, 3, 4))       // grows back
+        list[3...] = VCons<Int>()
+        #expect(list == VCons(0, 1, 2))             // empty replacement removes
+        list[...] = VCons(7, 8)
+        #expect(list == VCons(7, 8))
+    }
+
+    @Test func rangeSubscriptSetHasValueSemantics() {
+        let original = VCons(1, 2, 3)
+        var copy = original
+        copy[0..<2] = VCons(9)
+        #expect(original == VCons(1, 2, 3))
+        #expect(copy == VCons(9, 3))
+    }
+}
+
+@Suite struct AtomsTests {
+    @Test func flatList() {
+        #expect(VCons(1, 2, 3).atoms() == VList(1, 2, 3))
+        #expect(VCons(42).atoms() == VList(42))
+        #expect(VCons<Int>().atoms() == VList<Int>())
+    }
+
+    @Test func nestedSublistsAreFlattened() {
+        #expect(VCons<Int>(1, VCons(2, 3), 4).atoms() == VList(1, 2, 3, 4))
+        // ((1 2) (3 (4 5)))
+        let deep = VCons<Int>(VCons(1, 2), VCons<Int>(3, VCons(4, 5)))
+        #expect(deep.atoms() == VList(1, 2, 3, 4, 5))
+    }
+
+    @Test func dottedPairIncludesTailAtom() {
+        #expect(VCons(car: .Atom(1), cdr: .Atom(2)).atoms() == VList(1, 2))
+        // (1 (2 . 3) 4)
+        let list = VCons<Int>(1, VCons(car: .Atom(2), cdr: .Atom(3)), 4)
+        #expect(list.atoms() == VList(1, 2, 3, 4))
+    }
+
+    @Test func nilCarsAreSkipped() {
+        let list = VCons<Int>(car: nil, cdr: .Pair(VCons(car: .Atom(2), cdr: .Pair(VCons(car: nil)))))
+        #expect(list.atoms() == VList(2))
+    }
+}
