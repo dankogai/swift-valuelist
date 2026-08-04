@@ -56,29 +56,59 @@ public struct VList<Element> {
     }
 }
 extension VList {
-    /// An empty sequence yields the empty list.
-    /// Builds in order in a single pass, one cell per element.
-    public init<S: Sequence>(_ elements: S) where S.Element == Element {
-        var iterator = elements.makeIterator()
-        func build() -> Self? {
-            guard let element = iterator.next() else { return nil }
-            return Self(car: element, cdr: build())
+    /// O(1) — the natural way to grow a linked list.
+    public mutating func prepend(_ element: Element) {
+        self = .init(car: element, cdr: self)
+    }
+    public func prepending(_ element: Element) -> Self {
+        var copy = self
+        copy.prepend(element)
+        return copy
+    }
+    /// One pass prepending — reversal is the direction a linked list
+    /// naturally builds in.
+    public func reversed() -> Self {
+        var result = Self()
+        for element in self {
+            result.prepend(element)
         }
-        self = build() ?? Self()
+        return result
+    }
+    /// Like Array's mutating reverse().
+    public mutating func reverse() {
+        self = reversed()
+    }
+}
+// Building in order without recursion: prepend everything — O(1) each,
+// which builds reversed — then reverse once. Two passes of cells, no
+// intermediate Array, no unbounded stack.
+extension VList {
+    /// An empty sequence yields the empty list.
+    public init<S: Sequence>(_ elements: S) where S.Element == Element {
+        self.init()
+        for element in elements {
+            prepend(element)
+        }
+        reverse()
     }
     /// Concrete overload so VList([1, 2, 3]) binds Element to Int —
     /// without it the variadic init would win with Element = [Int].
+    /// Builds in a single pass: an Array can be walked backwards, and its
+    /// reversed() is a lazy view, so prepending needs no reverse() after.
     public init(_ elements: [Element]) {
-        self.init(elements[...])
+        self.init()
+        for element in elements.reversed() {
+            prepend(element)
+        }
     }
     /// VList(1, 2, 3); with no arguments, the empty list.
     public init(_ elements: Element...) {
-        self.init(elements[...])
+        self.init(elements)
     }
 }
 extension VList: ExpressibleByArrayLiteral {
     public init(arrayLiteral elements: Element...) {
-        self.init(elements[...])
+        self.init(elements)
     }
 }
 extension VList: CustomStringConvertible {
@@ -138,7 +168,7 @@ extension VList: Collection {
 // all come for free.
 extension VList: Equatable where Element: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        return lhs.car == rhs.car && lhs.cdr == rhs.cdr
+        return lhs.elementsEqual(rhs)
     }
 }
 extension VList: Hashable where Element: Hashable {
@@ -147,6 +177,26 @@ extension VList: Hashable where Element: Hashable {
     }
 }
 extension VList {
+    /// Splits off the first `position` elements, returned in reverse;
+    /// `self` becomes the rest. The building block for positional edits:
+    /// modify the rest, then prepend the reversed prefix back on.
+    private mutating func liftPrefix(_ position: Int) -> Self? {
+        var reversedPrefix = Self()
+        var remaining = position
+        while remaining > 0 {
+            guard let car = car else { return nil }
+            reversedPrefix.prepend(car)
+            self = cdr ?? Self()
+            remaining -= 1
+        }
+        return remaining == 0 ? reversedPrefix : nil
+    }
+    /// Prepends `reversedPrefix` back, restoring its original order.
+    private mutating func restorePrefix(_ reversedPrefix: Self) {
+        for element in reversedPrefix {
+            prepend(element)
+        }
+    }
     /// Like Array's last: nil when empty. O(count).
     public var last: Element? {
         guard !isEmpty else { return nil }
@@ -154,28 +204,17 @@ extension VList {
         while let next = current.cdr { current = next }
         return current.car
     }
-    /// Replaces the car of the `position`-th cell;
-    /// returns false when the list is shorter than that.
-    private mutating func replaceCar(at position: Int, with element: Element) -> Bool {
-        guard !isEmpty else { return false }
-        if position == 0 {
-            car = element
-            return true
-        }
-        guard var next = cdr else { return false }
-        let replaced = next.replaceCar(at: position - 1, with: element)
-        cdr = next
-        return replaced
-    }
     /// Array-like positional access, O(position); traps out of bounds.
     public subscript(position: Int) -> Element {
         get {
             return self[index(startIndex, offsetBy: position)]
         }
         set {
-            guard position >= 0, replaceCar(at: position, with: newValue) else {
+            guard position >= 0, let reversedPrefix = liftPrefix(position), !isEmpty else {
                 preconditionFailure("index out of bounds")
             }
+            car = newValue
+            restorePrefix(reversedPrefix)
         }
     }
     /// Bounds of `range` within this list, trapping out of bounds like Array.
@@ -210,18 +249,14 @@ extension VList {
 }
 extension VList {
     /// Splices `list` at the end — concatenation, like Array's append(contentsOf:).
+    /// Prepends self's elements onto `list` back to front.
     public mutating func append(contentsOf list: Self) {
         guard !list.isEmpty else { return }
-        if isEmpty {
-            self = list
-            return
+        var result = list
+        for element in reversed() {
+            result.prepend(element)
         }
-        if var next = cdr {
-            next.append(contentsOf: list)
-            cdr = next
-        } else {
-            cdr = list
-        }
+        self = result
     }
     public mutating func append<S: Sequence>(contentsOf newElements: S) where S.Element == Element {
         append(contentsOf: Self(newElements))
@@ -242,43 +277,44 @@ extension VList {
 // VList-returning transformations. These shadow the Sequence defaults in
 // member lookup, so list.map { ... } stays a VList; the Array-returning
 // versions remain reachable where the context asks for one, as in
-// let a: [Int] = list.map { ... }.
+// let a: [Int] = list.map { ... }. All build by prepend-then-reverse:
+// in order, no recursion, no intermediate Array.
 extension VList {
-    /// One pass prepending — reversal is the direction a linked list
-    /// naturally builds in, so no extra pass is needed here.
-    public func reversed() -> Self {
-        var result = Self()
+    public func map<T>(_ transform: (Element) throws -> T) rethrows -> VList<T> {
+        var result = VList<T>()
         for element in self {
-            result = Self(car: element, cdr: result)
+            result.prepend(try transform(element))
         }
+        result.reverse()
         return result
     }
-    // The transformations below recurse down the cdr chain, consing each
-    // transformed car onto the recursively built tail: in order, one cell
-    // per output element, no reversal pass. Each level applies its closure
-    // before recursing so side effects run front-to-back.
-    public func map<T>(_ transform: (Element) throws -> T) rethrows -> VList<T> {
-        guard let car = car else { return VList<T>() }
-        return VList<T>(car: try transform(car), cdr: try cdr?.map(transform))
-    }
     public func filter(_ isIncluded: (Element) throws -> Bool) rethrows -> Self {
-        guard let car = car else { return Self() }
-        let included = try isIncluded(car)
-        let rest = try cdr?.filter(isIncluded)
-        return included ? Self(car: car, cdr: rest) : rest ?? Self()
+        var result = Self()
+        for element in self where try isIncluded(element) {
+            result.prepend(element)
+        }
+        result.reverse()
+        return result
     }
     public func compactMap<T>(_ transform: (Element) throws -> T?) rethrows -> VList<T> {
-        guard let car = car else { return VList<T>() }
-        let transformed = try transform(car)
-        let rest = try cdr?.compactMap(transform)
-        guard let transformed else { return rest ?? VList<T>() }
-        return VList<T>(car: transformed, cdr: rest)
+        var result = VList<T>()
+        for element in self {
+            if let transformed = try transform(element) {
+                result.prepend(transformed)
+            }
+        }
+        result.reverse()
+        return result
     }
     public func flatMap<S: Sequence>(_ transform: (Element) throws -> S) rethrows -> VList<S.Element> {
-        guard let car = car else { return VList<S.Element>() }
-        let head = VList<S.Element>(try transform(car))
-        let rest = try cdr?.flatMap(transform) ?? VList<S.Element>()
-        return head + rest
+        var result = VList<S.Element>()
+        for element in self {
+            for transformed in try transform(element) {
+                result.prepend(transformed)
+            }
+        }
+        result.reverse()
+        return result
     }
     /// Sorting is the one honest Array round-trip: a comparison sort
     /// needs random access, which a linked spine cannot offer.
@@ -304,12 +340,11 @@ extension VList {
     /// Like Array's: traps when position is out of bounds.
     @discardableResult
     public mutating func remove(at position: Int) -> Element {
-        if position == 0 { return removeFirst() }
-        guard position > 0, var next = cdr else {
+        guard position >= 0, let reversedPrefix = liftPrefix(position), let removed = car else {
             preconditionFailure("index out of bounds")
         }
-        let removed = next.remove(at: position - 1)
-        cdr = next
+        self = cdr ?? Self()
+        restorePrefix(reversedPrefix)
         return removed
     }
     public mutating func removeAll() {
