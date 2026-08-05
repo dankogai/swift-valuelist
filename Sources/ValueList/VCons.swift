@@ -338,6 +338,19 @@ extension VCons {
 }
 
 extension VCons {
+    /// Sorts the occupied nodes into a proper list — nil cars and an
+    /// atom cdr do not survive, like the range subscripts. A stable
+    /// merge sort (MergeSort.swift): sequential access only, no Array.
+    public func sorted(by areInIncreasingOrder: (Node, Node) throws -> Bool) rethrows -> Self {
+        var result = Self()
+        for node in try mergeSorted(by: areInIncreasingOrder).reversed() {
+            result.prepend(node)
+        }
+        return result
+    }
+}
+
+extension VCons {
     /// All leaf atoms of the tree, flattened into a VList in order:
     /// (1 (2 3) 4).atoms() == (1 2 3 4), and the atom cdr of a dotted
     /// pair is included: (1 . 2).atoms() == (1 2). Spines are walked

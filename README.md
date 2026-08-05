@@ -97,6 +97,7 @@ Transformations return `VList`, so chains never leave the type — while the `Ar
 ```swift
 VList(5, 3, 1, 4, 2).filter { $0 > 1 }.map { $0 * 10 }.sorted()  // (20 30 40 50)
 let asArray: [Int] = VList(1, 2, 3).map { $0 * 2 }               // [2, 4, 6]
+[3, 1, 2].mergeSorted()   // (1 2 3) — any Sequence sorts into a VList
 ```
 
 ## `VCons<Element>`
@@ -145,7 +146,7 @@ Positions count elements the way iteration does: `nil` cars are skipped and an a
 
 - **Value semantics via `indirect enum`.** A struct cannot store itself, so the recursion is heap-boxed through an indirect enum; the box is copied on mutation, never shared observably.
 - **Prepend, then reverse.** Spines are built and edited iteratively — `prepend` is O(1), a final `reverse()` restores order, and sources that can be walked backwards (like `Array`) skip even that. No recursion on any spine, so list length never touches the stack; recursion remains only where trees make it inherent (nested sublists in `VCons` cars).
-- **Costs are what a linked list costs.** `count`, positional access, and `append` are O(n); `prepend` is O(1). `sorted()` is the one deliberate `Array` round-trip — comparison sorting needs random access.
+- **Costs are what a linked list costs.** `count`, positional access, and `append` are O(n); `prepend` is O(1). Even `sorted()` stays in the family: a stable bottom-up merge sort over the cells themselves (`MergeSort.swift`) — sequential access is all merge sort ever needs, so nothing buffers into an `Array`. As a bonus, every `Sequence` gains `mergeSorted(by:)`, delivering its elements sorted into a `VList`.
 - **`VList` cannot be improper by construction**; `VCons` can, and its API traps (`preconditionFailure`) rather than misbehaves when an operation meets an improper list it cannot honor — appending to, reversing, or range-subscripting past a dotted tail.
 
 ## License
