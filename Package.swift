@@ -22,6 +22,13 @@ let package = Package(
             name: "ValueListTests",
             dependencies: ["ValueList"]
         ),
+        // Benchmarks are a standalone executable so CI never runs them —
+        // the workflow only invokes `swift test`. Run locally with:
+        //   swift run -c release Benchmarks [n]
+        .executableTarget(
+            name: "Benchmarks",
+            dependencies: ["ValueList"]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )
