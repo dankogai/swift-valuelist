@@ -149,6 +149,16 @@ Positions count elements the way iteration does: `nil` cars are skipped and an a
 - **Costs are what a linked list costs.** `count`, positional access, and `append` are O(n); `prepend` is O(1). Even `sorted()` stays in the family: a stable bottom-up merge sort over the cells themselves (`MergeSort.swift`) — sequential access is all merge sort ever needs, so nothing buffers into an `Array`. As a bonus, every `Sequence` gains `mergeSorted(by:)`, delivering its elements sorted into a `VList`.
 - **`VList` cannot be improper by construction**; `VCons` can, and its API traps (`preconditionFailure`) rather than misbehaves when an operation meets an improper list it cannot honor — appending to, reversing, or range-subscripting past a dotted tail.
 
+## Benchmarks
+
+"Performance aside" is quantifiable. A standalone executable target compares both types against `Array` — run it locally (CI never does; the workflow only invokes `swift test`):
+
+```bash
+swift run -c release Benchmarks
+```
+
+Full results and commentary live in [BENCHMARK.md](BENCHMARK.md). The shape in one sentence: `prepend` is the one race a linked list wins (~7× faster than Array's head-insert, which is O(n²) in total), repeated `append` is the one to avoid (quadratic — build with an init or `append(contentsOf:)` instead), and everything else costs a few hundred× — the price of a heap cell per element versus a contiguous buffer.
+
 ## License
 
 [MIT](LICENSE). Copyright (c) 2026 Dan Kogai.
