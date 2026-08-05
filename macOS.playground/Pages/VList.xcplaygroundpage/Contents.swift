@@ -53,6 +53,7 @@ let chained = VList(5, 3, 1, 4, 2)
     .sorted()
 chained.description                     // (20 30 40 50)
 VList("a", "b").flatMap { [$0, $0] }.description  // (a a b b)
+[3, 1, 2].mergeSorted().description     // (1 2 3) — any Sequence sorts into a VList
 let asArray: [Int] = chained.map { $0 / 10 }      // Array versions stay reachable
 asArray
 //: ## Value semantics

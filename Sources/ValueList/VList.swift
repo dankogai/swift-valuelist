@@ -316,15 +316,15 @@ extension VList {
         result.reverse()
         return result
     }
-    /// Sorting is the one honest Array round-trip: a comparison sort
-    /// needs random access, which a linked spine cannot offer.
+    /// A stable merge sort over the cells themselves (MergeSort.swift) —
+    /// sequential access is all a linked list needs.
     public func sorted(by areInIncreasingOrder: (Element, Element) throws -> Bool) rethrows -> Self {
-        return Self(try Array(self).sorted(by: areInIncreasingOrder))
+        return try mergeSorted(by: areInIncreasingOrder)
     }
 }
 extension VList where Element: Comparable {
     public func sorted() -> Self {
-        return Self(Array(self).sorted())
+        return mergeSorted()
     }
 }
 extension VList {

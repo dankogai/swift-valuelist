@@ -49,6 +49,8 @@ var edited = list
 edited[0] = .Atom(100)
 edited[1..<3] = VCons(9)                // replaceSubrange semantics — resizes
 edited.description                      // (100 9 3 4)
+//: ## Sorting — a stable merge sort, no Array round-trip
+VCons(3, 1, 2).sorted { $0.atom! < $1.atom! }.description  // (1 2 3)
 //: ## Reversal is cell-preserving
 list.reversed().description             // (4 3 2 1)
 var flipped = VCons(1, 2, 3)
